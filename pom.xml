@@ -71,6 +71,7 @@
     <couchbase.version>1.1.8</couchbase.version>
     <tarantool.version>1.6.1</tarantool.version>
     <aerospike.version>3.1.2</aerospike.version>
+    <crate.version>0.50.2</crate.version>
   </properties>
 
   <modules>
@@ -96,6 +97,7 @@
     <module>orientdb</module>
     <module>redis</module>
     <module>tarantool</module>
+    <module>crate</module>
     <!--<module>voldemort</module>-->
   </modules>
 
