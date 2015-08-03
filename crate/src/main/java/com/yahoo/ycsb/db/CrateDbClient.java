@@ -28,24 +28,27 @@ public class CrateDbClient extends DB {
 
     public static final String DEFAULT_HOST = "localhost:19301";
     public static final String DEFAULT_NUMBER_OF_REPLICAS = "1";
-    public static final String DEFAULT_NUMBER_OF_SHARDS = "2";
+    public static final String DEFAULT_NUMBER_OF_SHARDS = "32";
 
     public static final String DEFAULT_TABLE_NAME = "usertable";
     public static final String DEFAULT_PRIMARY_KEY = "ycsb_key";
 
     private CrateClient crateClient;
     private String primaryKey;
+    private final static Object lock = new Object();
 
     public void init() throws DBException {
-        Properties properties = getProperties();
-        String[] hosts = properties.getProperty(HOSTS_PROPERTY, DEFAULT_HOST).split(",");
-        String tableName = properties.getProperty(TABLE_NAME_PROPERTY, DEFAULT_TABLE_NAME);
-        primaryKey = properties.getProperty(PRIMARY_KEY_PROPERTY, DEFAULT_PRIMARY_KEY);
-        crateClient = new CrateClient(hosts);
-        try {
-            createTableIfNotExist(properties, tableName);
-        } catch (Exception e) {
-            throw new DBException("Could not initialize CrateClient", e);
+        synchronized (lock) {
+            Properties properties = getProperties();
+            String[] hosts = properties.getProperty(HOSTS_PROPERTY, DEFAULT_HOST).split(",");
+            String tableName = properties.getProperty(TABLE_NAME_PROPERTY, DEFAULT_TABLE_NAME);
+            primaryKey = properties.getProperty(PRIMARY_KEY_PROPERTY, DEFAULT_PRIMARY_KEY);
+            crateClient = new CrateClient(hosts);
+            try {
+                createTableIfNotExist(properties, tableName);
+            } catch (Exception e) {
+                throw new DBException("Could not initialize CrateClient", e);
+            }
         }
     }
 
