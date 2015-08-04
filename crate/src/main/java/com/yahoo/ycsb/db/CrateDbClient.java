@@ -1,13 +1,11 @@
 package com.yahoo.ycsb.db;
 
-import com.yahoo.ycsb.ByteIterator;
-import com.yahoo.ycsb.DB;
-import com.yahoo.ycsb.DBException;
-import com.yahoo.ycsb.StringByteIterator;
+import com.yahoo.ycsb.*;
 import io.crate.action.sql.SQLRequest;
 import io.crate.action.sql.SQLResponse;
 import io.crate.client.CrateClient;
 
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -32,6 +30,8 @@ public class CrateDbClient extends DB {
 
     public static final String DEFAULT_TABLE_NAME = "usertable";
     public static final String DEFAULT_PRIMARY_KEY = "ycsb_key";
+
+    private static boolean DEBUG = false;
 
     private CrateClient crateClient;
     private String primaryKey;
@@ -145,13 +145,14 @@ public class CrateDbClient extends DB {
     @Override
     public int insert(String table, String key, HashMap<String, ByteIterator> values) {
         try {
-            Object[] args = new Object[values.size() + 1]; // values + primary key
-            int idx = 0;
-            args[idx++] = key;
+            Map<String, Object> fieldValues = new HashMap<String, Object>();
             for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-                args[idx++] = entry.getValue().toString();
+                Object value;
+                ByteIterator byteIterator = entry.getValue();
+                value = byteIterator.toString();
+                fieldValues.put(entry.getKey(), value);
             }
-            crateClient.sql(new SQLRequest(prepareInsertStatement(table, values), args)).actionGet();
+            crateClient.sql(new SQLRequest(prepareInsertStatement(table), new Object[]{key, fieldValues})).actionGet();
             return OK;
         } catch (Exception e) {
             System.out.println(String.format("Could not insert values into table for key: %s err: %s",
@@ -172,23 +173,27 @@ public class CrateDbClient extends DB {
         StringBuilder stmt = new StringBuilder("create table if not exists  ")
             .append(tableName)
             .append(" ( ").append(primaryKey)
-            .append(" string primary key) ")
-            .append("clustered into ? shards with (number_of_replicas=?, refresh_interval=0)");
+            .append(" string primary key, " +
+                    "fields object(dynamic) as (" +
+                    "field0 string," +
+                    "field1 string," +
+                    "field2 string," +
+                    "field3 string," +
+                    "field4 string," +
+                    "field5 string," +
+                    "field6 string," +
+                    "field7 string," +
+                    "field8 string," +
+                    "field9 string)" +
+                    ") " +
+                    "clustered into ? shards with (number_of_replicas=?, refresh_interval=0)");
         crateClient.sql(new SQLRequest(stmt.toString(), new Object[]{shards, replicas})).actionGet();
     }
 
-    private String prepareInsertStatement(String table, final HashMap<String, ByteIterator> values) {
+    private String prepareInsertStatement(String table) {
         StringBuilder stmt = new StringBuilder("insert into ")
                 .append(table).append(" (")
-                .append(primaryKey);
-        for (String key : values.keySet()) {
-            stmt.append(", ").append(key);
-        }
-        stmt.append(") values (?");
-        for (int i = 0; i < values.size(); i++) {
-            stmt.append(", ?");
-        }
-        stmt.append(")");
+                .append(primaryKey + ", fields) values (?, ?)");
         return stmt.toString();
     }
 
@@ -213,7 +218,6 @@ public class CrateDbClient extends DB {
         if (fields == null) {
             stmt.append(" * ");
         } else {
-            System.out.println("filedsize: " + fields.size());
             Iterator<String> it = fields.iterator();
             stmt.append(it.next());
             while (it.hasNext()) {
