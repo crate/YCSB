@@ -7,6 +7,7 @@ import com.yahoo.ycsb.StringByteIterator;
 import io.crate.action.sql.SQLRequest;
 import io.crate.action.sql.SQLResponse;
 import io.crate.client.CrateClient;
+import io.crate.shade.org.apache.commons.lang3.StringUtils;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -32,6 +33,7 @@ public class CrateDbClient extends DB {
 
     public static final String DEFAULT_TABLE_NAME = "usertable";
     public static final String DEFAULT_PRIMARY_KEY = "ycsb_key";
+    private static final String DYN_FIELD_NAME = "obj" ;
 
     private CrateClient crateClient;
     private String primaryKey;
@@ -118,13 +120,13 @@ public class CrateDbClient extends DB {
     @Override
     public int update(String table, String key, HashMap<String, ByteIterator> values) {
         try {
-            Object[] args = new Object[values.size() + 1]; // values + primary key
-            int idx = 0;
+            StringBuilder object = new StringBuilder();
             for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-                args[idx++] = entry.getValue().toString();
+                object.append(DYN_FIELD_NAME + "['" + entry.getKey() + "']" + "=" + entry.getValue().toString());
+                object.append(", ");
             }
-            args[idx] = key;
-            crateClient.sql(new SQLRequest(prepareUpdateStatement(table, values.keySet()), args)).actionGet();
+            String stmt = "update " + table + " set " + StringUtils.removeEnd(object.toString(), ", ") +  " where " + primaryKey + "=?";
+            crateClient.sql(new SQLRequest(stmt, new Object[]{key})).actionGet();
             return OK;
         } catch (Exception e) {
             System.out.println(String.format("Could not update table values for key: %s err: %s",
@@ -189,22 +191,6 @@ public class CrateDbClient extends DB {
             stmt.append(", ?");
         }
         stmt.append(")");
-        return stmt.toString();
-    }
-
-    private String prepareUpdateStatement(String tableName, Set<String> fields) {
-        StringBuilder stmt = new StringBuilder("update " )
-                .append(tableName)
-                .append(" set ");
-        Iterator<String> it = fields.iterator();
-        stmt.append(it.next())
-                .append("=?");
-        while (it.hasNext()) {
-            stmt.append(String.format(", %s=?", it.next()));
-        }
-        stmt.append(" where ")
-                .append(primaryKey)
-                .append("=?");
         return stmt.toString();
     }
 
