@@ -41,6 +41,7 @@ public class CrateDbClientTest {
     public void setUp() {
         instance.insert(MOCK_TABLE, MOCK_KEY1, mockValues);
         instance.insert(MOCK_TABLE, MOCK_KEY2, mockValues);
+        instance.crateClient.sql("refresh table usertable").actionGet();
     }
 
     @Test
@@ -76,6 +77,7 @@ public class CrateDbClientTest {
             values.put(key, new StringByteIterator("updated" + key));
         }
         assertEquals(0, instance.update(MOCK_TABLE, MOCK_KEY1, values));
+        instance.crateClient.sql("refresh table usertable").actionGet();
 
         HashMap<String, ByteIterator> result = new HashMap<String, ByteIterator>(mockValues.size());
         instance.read(MOCK_TABLE, MOCK_KEY1, mockValues.keySet(), result);

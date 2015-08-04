@@ -31,11 +31,11 @@ public class CrateDbClient extends DB {
 
     public static final String DEFAULT_TABLE_NAME = "usertable";
     public static final String DEFAULT_PRIMARY_KEY = "ycsb_key";
-    private static final String DYN_FIELD_NAME = "obj" ;
+    private static final String DYN_FIELD_NAME = "fields" ;
 
     private static boolean DEBUG = false;
 
-    private CrateClient crateClient;
+    protected CrateClient crateClient;
     private String primaryKey;
     private final static Object lock = new Object();
 
@@ -66,13 +66,11 @@ public class CrateDbClient extends DB {
     @Override
     public int read(String table, String key, Set<String> fields, HashMap<String, ByteIterator> result) {
         try {
-            String stmt = prepareReadStatement(table, fields);
+            String stmt = "select fields from " + table + " where " + primaryKey + "=?";
             SQLResponse response = crateClient.sql(new SQLRequest(stmt, new Object[]{key})).actionGet();
-            for (int i = 0; i < response.cols().length; i++) {
-                String field = response.cols()[i];
-                if (!field.equals(primaryKey)) {
-                    result.put(response.cols()[i], new StringByteIterator(response.rows()[0][i].toString()));
-                }
+            HashMap<String, String> entries = (HashMap) response.rows()[0][0];
+            for (Map.Entry<String, String> entry : entries.entrySet()) {
+                result.put(entry.getKey(), new StringByteIterator(entry.getValue().toString()));
             }
             return OK;
         } catch (Exception e) {
@@ -122,7 +120,7 @@ public class CrateDbClient extends DB {
         try {
             StringBuilder object = new StringBuilder();
             for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-                object.append(DYN_FIELD_NAME + "['" + entry.getKey() + "']" + "=" + entry.getValue().toString());
+                object.append(DYN_FIELD_NAME + "['" + entry.getKey() + "']" + "='" + entry.getValue().toString() + "'");
                 object.append(", ");
             }
             String stmt = "update " + table + " set " + StringUtils.removeEnd(object.toString(), ", ") +  " where " + primaryKey + "=?";
@@ -211,11 +209,7 @@ public class CrateDbClient extends DB {
                 stmt.append(", ").append(it.next());
             }
         }
-        stmt.append(" from ")
-                .append(table)
-                .append(" where ")
-                .append(primaryKey)
-                .append("=?");
+        stmt.append(" from " + table + " where " + primaryKey + "=?");
         return stmt.toString();
     }
 
