@@ -172,21 +172,22 @@ public class CrateDbClient extends DB {
                 DEFAULT_NUMBER_OF_SHARDS));
         String replicas = properties.getProperty(REPLICAS_PROPERTY, DEFAULT_NUMBER_OF_REPLICAS);
 
+        StringBuilder fields = new StringBuilder();
+        String columnStr = "";
+        for (int i=0; i<=9; i++) {
+            columnStr = "field" + String.valueOf(i) + " string";
+            if (i>0) {
+                fields.append(", " + columnStr);
+            } else {
+                fields.append(columnStr);
+            }
+        }
         StringBuilder stmt = new StringBuilder("create table if not exists  ")
             .append(tableName)
             .append(" ( ").append(primaryKey)
             .append(" string primary key, " +
                     "fields object(dynamic) as (" +
-                    "field0 string," +
-                    "field1 string," +
-                    "field2 string," +
-                    "field3 string," +
-                    "field4 string," +
-                    "field5 string," +
-                    "field6 string," +
-                    "field7 string," +
-                    "field8 string," +
-                    "field9 string)" +
+                    fields + ")" +
                     ") " +
                     "clustered into ? shards with (number_of_replicas=?, refresh_interval=0)");
         crateClient.sql(new SQLRequest(stmt.toString(), new Object[]{shards, replicas})).actionGet();
