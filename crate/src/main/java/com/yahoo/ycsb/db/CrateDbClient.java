@@ -167,14 +167,13 @@ public class CrateDbClient extends DB {
     public void createTableIfNotExist(Properties properties, String tableName) {
         int shards = Integer.parseInt(properties.getProperty(SHARDS_PROPERTY,
                 DEFAULT_NUMBER_OF_SHARDS));
-        int replicas = Integer.parseInt(properties.getProperty(REPLICAS_PROPERTY,
-                DEFAULT_NUMBER_OF_REPLICAS));
+        String replicas = properties.getProperty(REPLICAS_PROPERTY, DEFAULT_NUMBER_OF_REPLICAS);
 
         StringBuilder stmt = new StringBuilder("create table if not exists  ")
             .append(tableName)
             .append(" ( ").append(primaryKey)
             .append(" string primary key) ")
-            .append("clustered into ? shards with (number_of_replicas=?)");
+            .append("clustered into ? shards with (number_of_replicas=?, refresh_interval=0)");
         crateClient.sql(new SQLRequest(stmt.toString(), new Object[]{shards, replicas})).actionGet();
     }
 
