@@ -119,13 +119,19 @@ public class CrateDbClient extends DB {
     @Override
     public int update(String table, String key, HashMap<String, ByteIterator> values) {
         try {
-            StringBuilder object = new StringBuilder();
+            int idx = 0, len = values.size();
+            StringBuilder fieldsBuilder = new StringBuilder();
+            Object[] args = new Object[len+1];
             for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-                object.append(DYN_FIELD_NAME + "['" + entry.getKey() + "']" + "='" + entry.getValue().toString() + "'");
-                object.append(", ");
+                fieldsBuilder.append(DYN_FIELD_NAME + "['" + entry.getKey() + "']" + " = ?");
+                if (idx < len-1) {
+                    fieldsBuilder.append(", ");
+                }
+                args[idx++] = entry.getValue().toString();
             }
-            String stmt = "update " + table + " set " + StringUtils.removeEnd(object.toString(), ", ") +  " where " + primaryKey + "=?";
-            crateClient.sql(new SQLRequest(stmt, new Object[]{key})).actionGet();
+            args[idx] = key;
+            String stmt = "update " + table + " set " + fieldsBuilder.toString() + " where " + primaryKey + " = ?";
+            crateClient.sql(new SQLRequest(stmt, args)).actionGet();
             return OK;
         } catch (Exception e) {
             System.out.println(String.format("Could not update table values for key: %s err: %s",
