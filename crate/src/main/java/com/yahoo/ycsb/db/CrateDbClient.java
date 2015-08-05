@@ -1,14 +1,15 @@
 package com.yahoo.ycsb.db;
 
-import com.yahoo.ycsb.*;
+import com.yahoo.ycsb.ByteIterator;
+import com.yahoo.ycsb.DB;
+import com.yahoo.ycsb.DBException;
+import com.yahoo.ycsb.StringByteIterator;
 import io.crate.action.sql.SQLRequest;
 import io.crate.action.sql.SQLResponse;
 import io.crate.client.CrateClient;
 import io.crate.shade.org.apache.commons.lang3.StringUtils;
 
-import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -145,12 +146,9 @@ public class CrateDbClient extends DB {
     @Override
     public int insert(String table, String key, HashMap<String, ByteIterator> values) {
         try {
-            Map<String, Object> fieldValues = new HashMap<String, Object>();
+            Map<String, String> fieldValues = new HashMap<String, String>();
             for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-                Object value;
-                ByteIterator byteIterator = entry.getValue();
-                value = byteIterator.toString();
-                fieldValues.put(entry.getKey(), value);
+                fieldValues.put(entry.getKey(), entry.getValue().toString());
             }
             crateClient.sql(new SQLRequest(prepareInsertStatement(table), new Object[]{key, fieldValues})).actionGet();
             return OK;
@@ -172,9 +170,9 @@ public class CrateDbClient extends DB {
 
         StringBuilder fields = new StringBuilder();
         String columnStr = "";
-        for (int i=0; i<=9; i++) {
+        for (int i = 0; i < 10; i++) {
             columnStr = "field" + String.valueOf(i) + " string";
-            if (i>0) {
+            if (i > 0) {
                 fields.append(", " + columnStr);
             } else {
                 fields.append(columnStr);
@@ -195,21 +193,6 @@ public class CrateDbClient extends DB {
         StringBuilder stmt = new StringBuilder("insert into ")
                 .append(table).append(" (")
                 .append(primaryKey + ", fields) values (?, ?)");
-        return stmt.toString();
-    }
-
-    private String prepareReadStatement(String table, final Set<String> fields) {
-        StringBuilder stmt = new StringBuilder("select ");
-        if (fields == null) {
-            stmt.append(" * ");
-        } else {
-            Iterator<String> it = fields.iterator();
-            stmt.append(it.next());
-            while (it.hasNext()) {
-                stmt.append(", ").append(it.next());
-            }
-        }
-        stmt.append(" from " + table + " where " + primaryKey + "=?");
         return stmt.toString();
     }
 
