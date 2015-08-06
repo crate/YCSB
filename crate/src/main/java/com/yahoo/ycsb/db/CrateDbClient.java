@@ -7,7 +7,6 @@ import com.yahoo.ycsb.StringByteIterator;
 import io.crate.action.sql.SQLRequest;
 import io.crate.action.sql.SQLResponse;
 import io.crate.client.CrateClient;
-import io.crate.shade.org.apache.commons.lang3.StringUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,24 +16,8 @@ import java.util.Vector;
 
 public class CrateDbClient extends DB {
 
-    public static final String HOSTS_PROPERTY  = "crate.hosts";
-    public static final String SHARDS_PROPERTY  = "crate.shards";
-    public static final String TABLE_NAME_PROPERTY = "crate.table.name";
-    public static final String PRIMARY_KEY_PROPERTY = "crate.table.pk";
-    public static final String REPLICAS_PROPERTY = "crate.replicas";
-
     public static final int OK = 0;
     public static final int FAILURE = 1;
-
-    public static final String DEFAULT_HOST = "localhost:19301";
-    public static final String DEFAULT_NUMBER_OF_REPLICAS = "1";
-    public static final String DEFAULT_NUMBER_OF_SHARDS = "32";
-
-    public static final String DEFAULT_TABLE_NAME = "usertable";
-    public static final String DEFAULT_PRIMARY_KEY = "ycsb_key";
-    private static final String DYN_FIELD_NAME = "fields" ;
-
-    private static boolean DEBUG = false;
 
     protected CrateClient crateClient;
     private String primaryKey;
@@ -43,9 +26,9 @@ public class CrateDbClient extends DB {
     public void init() throws DBException {
         synchronized (lock) {
             Properties properties = getProperties();
-            String[] hosts = properties.getProperty(HOSTS_PROPERTY, DEFAULT_HOST).split(",");
-            String tableName = properties.getProperty(TABLE_NAME_PROPERTY, DEFAULT_TABLE_NAME);
-            primaryKey = properties.getProperty(PRIMARY_KEY_PROPERTY, DEFAULT_PRIMARY_KEY);
+            String[] hosts = properties.getProperty(Constants.HOSTS_PROPERTY, Constants.DEFAULT_HOST).split(",");
+            String tableName = properties.getProperty(Constants.TABLE_NAME_PROPERTY, Constants.DEFAULT_TABLE_NAME);
+            primaryKey = properties.getProperty(Constants.PRIMARY_KEY_PROPERTY, Constants.DEFAULT_PRIMARY_KEY);
             crateClient = new CrateClient(hosts);
             try {
                 createTableIfNotExist(properties, tableName);
@@ -69,9 +52,9 @@ public class CrateDbClient extends DB {
         try {
             String stmt = "select fields from " + table + " where " + primaryKey + "=?";
             SQLResponse response = crateClient.sql(new SQLRequest(stmt, new Object[]{key})).actionGet();
-            HashMap<String, String> entries = (HashMap) response.rows()[0][0];
-            for (Map.Entry<String, String> entry : entries.entrySet()) {
-                result.put(entry.getKey(), new StringByteIterator(entry.getValue().toString()));
+            HashMap<String, String> entries = (HashMap<String, String>) response.rows()[0][0];
+            for (String entry : entries.keySet()) {
+                result.put(entry, new StringByteIterator(entries.get(entry)));
             }
             return OK;
         } catch (Exception e) {
@@ -121,13 +104,13 @@ public class CrateDbClient extends DB {
         try {
             int idx = 0, len = values.size();
             StringBuilder fieldsBuilder = new StringBuilder();
-            Object[] args = new Object[len+1];
-            for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-                fieldsBuilder.append(DYN_FIELD_NAME + "['" + entry.getKey() + "']" + " = ?");
-                if (idx < len-1) {
+            Object[] args = new Object[len + 1];
+            for (String field : values.keySet()) {
+                fieldsBuilder.append("fields['" + field + "']" + " = ?");
+                if (idx < len - 1) {
                     fieldsBuilder.append(", ");
                 }
-                args[idx++] = entry.getValue().toString();
+                args[idx++] = values.get(field).toString();
             }
             args[idx] = key;
             String stmt = "update " + table + " set " + fieldsBuilder.toString() + " where " + primaryKey + " = ?";
@@ -153,8 +136,8 @@ public class CrateDbClient extends DB {
     public int insert(String table, String key, HashMap<String, ByteIterator> values) {
         try {
             Map<String, String> fieldValues = new HashMap<String, String>();
-            for (Map.Entry<String, ByteIterator> entry : values.entrySet()) {
-                fieldValues.put(entry.getKey(), entry.getValue().toString());
+            for (String field : values.keySet()) {
+                fieldValues.put(field, values.get(field).toString());
             }
             crateClient.sql(new SQLRequest(prepareInsertStatement(table), new Object[]{key, fieldValues})).actionGet();
             return OK;
@@ -170,9 +153,9 @@ public class CrateDbClient extends DB {
     }
 
     public void createTableIfNotExist(Properties properties, String tableName) {
-        int shards = Integer.parseInt(properties.getProperty(SHARDS_PROPERTY,
-                DEFAULT_NUMBER_OF_SHARDS));
-        String replicas = properties.getProperty(REPLICAS_PROPERTY, DEFAULT_NUMBER_OF_REPLICAS);
+        int shards = Integer.parseInt(properties.getProperty(Constants.SHARDS_PROPERTY,
+                Constants.DEFAULT_NUMBER_OF_SHARDS));
+        String replicas = properties.getProperty(Constants.REPLICAS_PROPERTY, Constants.DEFAULT_NUMBER_OF_REPLICAS);
 
         StringBuilder fields = new StringBuilder();
         String columnStr = "";
@@ -196,10 +179,7 @@ public class CrateDbClient extends DB {
     }
 
     private String prepareInsertStatement(String table) {
-        StringBuilder stmt = new StringBuilder("insert into ")
-                .append(table).append(" (")
-                .append(primaryKey + ", fields) values (?, ?)");
-        return stmt.toString();
+        return "insert into " + table + " (" + primaryKey + ", fields) values (?, ?)";
     }
 
     @Override
