@@ -303,10 +303,10 @@ public class CrateDbClientTest {
                 boolean abort = false;
                 try {
                     String res;
-                    while (status[0] != 200 || abort) {
+                    while (status[0] != 200 || !abort) {
                         try {
                             res = httpclient.execute(httpget, responseHandler);
-                            System.out.println(res);
+                            System.out.println(String.format("%s %s", res, status[0]));
                             Thread.sleep(1000L);
                         } catch (InterruptedException e) {
                             e.printStackTrace();
