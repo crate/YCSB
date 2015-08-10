@@ -5,14 +5,11 @@ import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.StringByteIterator;
 import io.crate.shade.com.google.common.base.Joiner;
 import io.crate.shade.com.google.common.base.Throwables;
-import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
-import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -44,7 +41,7 @@ import static org.testng.AssertJUnit.assertEquals;
 public class CrateDbClientTest {
 
     private final static CrateDbClient instance = new CrateDbClient();
-    private final static String MOCK_TABLE = "usertable";
+    private final static String MOCK_TABLE = "usertable_test";
     private final static String MOCK_KEY0 = "0";
     private final static String MOCK_KEY1 = "1";
     private final static String MOCK_KEY2 = "2";
@@ -65,7 +62,8 @@ public class CrateDbClientTest {
     public static void setUpClass() throws DBException {
         startCrate();
         waitForCluster();
-        instance.init();
+        String[] hosts = new String[]{ Constants.DEFAULT_HOST };
+        instance.init(hosts, MOCK_TABLE);
     }
 
     @BeforeMethod
@@ -78,7 +76,7 @@ public class CrateDbClientTest {
         }
         instance.insert(MOCK_TABLE, MOCK_KEY1, mockValues);
         instance.insert(MOCK_TABLE, MOCK_KEY2, mockValues1);
-        instance.crateClient.sql("refresh table usertable").actionGet();
+        refreshTable();
     }
 
     private String genString(int dataSize) {
@@ -120,7 +118,7 @@ public class CrateDbClientTest {
     @Test
     public void testUpdate() {
         assertEquals(0, instance.update(MOCK_TABLE, MOCK_KEY1, mockValues1));
-        instance.crateClient.sql("refresh table usertable").actionGet();
+        refreshTable();
 
         HashMap<String, ByteIterator> result = new HashMap<String, ByteIterator>(mockValues.size());
         instance.read(MOCK_TABLE, MOCK_KEY1, mockValues.keySet(), result);
@@ -142,6 +140,10 @@ public class CrateDbClientTest {
         instance.dropTable(MOCK_TABLE);
         instance.cleanup();
         stopCrate();
+    }
+
+    public void refreshTable() {
+        instance.crateClient.sql(String.format("refresh table %s", MOCK_TABLE)).actionGet();
     }
 
     private static File getOrCreateDataDir() {
@@ -306,7 +308,7 @@ public class CrateDbClientTest {
                     while (status[0] != 200 || !abort) {
                         try {
                             res = httpclient.execute(httpget, responseHandler);
-                            System.out.println(String.format("%s %s", res, status[0]));
+                            System.out.println(String.format("%s %s", status[0], res));
                             Thread.sleep(1000L);
                         } catch (InterruptedException e) {
                             e.printStackTrace();

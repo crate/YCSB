@@ -24,10 +24,15 @@ public class CrateDbClient extends DB {
     private final static Object lock = new Object();
 
     public void init() throws DBException {
+        Properties properties = getProperties();
+        String[] hosts = properties.getProperty(Constants.HOSTS_PROPERTY, Constants.DEFAULT_HOST).split(",");
+        String tableName = properties.getProperty(Constants.TABLE_NAME_PROPERTY, Constants.DEFAULT_TABLE_NAME);
+        init(hosts, tableName);
+    }
+
+    public void init(String[] hosts, String tableName) throws DBException {
         synchronized (lock) {
             Properties properties = getProperties();
-            String[] hosts = properties.getProperty(Constants.HOSTS_PROPERTY, Constants.DEFAULT_HOST).split(",");
-            String tableName = properties.getProperty(Constants.TABLE_NAME_PROPERTY, Constants.DEFAULT_TABLE_NAME);
             primaryKey = properties.getProperty(Constants.PRIMARY_KEY_PROPERTY, Constants.DEFAULT_PRIMARY_KEY);
             crateClient = new CrateClient(hosts);
             try {
