@@ -1,9 +1,13 @@
 package com.yahoo.ycsb.db;
 
+import java.util.Random;
+
 public interface Constants {
 
-    public static final int HTTP_PORT = 4001;
-    public static final int TRANSPORT_PORT = 4002;
+    final Random rand = new Random();
+
+    public static final int HTTP_PORT = 44200 + rand.nextInt(100);
+    public static final int TRANSPORT_PORT = 44300 + rand.nextInt(100);
 
     public static final String HOSTS_PROPERTY  = "crate.hosts";
     public static final String SHARDS_PROPERTY  = "crate.shards";
