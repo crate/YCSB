@@ -5,6 +5,14 @@ import com.yahoo.ycsb.DBException;
 import com.yahoo.ycsb.StringByteIterator;
 import io.crate.shade.com.google.common.base.Joiner;
 import io.crate.shade.com.google.common.base.Throwables;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -48,7 +56,7 @@ public class CrateDbClientTest {
     private HashMap<String, ByteIterator> mockValues1;
 
     private static File workingDirectory;
-    private static Task task;
+    private static CrateProcessTask task;
 
     private final static String CDN_URL = "https://cdn.crate.io/downloads/releases";
     public static List<URI> uris = Arrays.asList(URI.create(String.format("%s/crate-%s.tar.gz", CDN_URL, CRATE_VERSION)));
@@ -56,6 +64,7 @@ public class CrateDbClientTest {
     @BeforeClass
     public static void setUpClass() throws DBException {
         startCrate();
+        waitForCluster();
         instance.init();
     }
 
@@ -163,7 +172,7 @@ public class CrateDbClientTest {
             String fn = new File(download.getFile()).getName();
             File tmpFile = new File(fn);
             if (!tmpFile.exists()) {
-                System.out.println("Downloading crate tarball...");
+                System.out.println("Downloading Crate release ...");
                 tmpFile.createNewFile();
                 ReadableByteChannel rbc = Channels.newChannel(download.openStream());
                 FileOutputStream stream = new FileOutputStream(tmpFile);
@@ -199,11 +208,10 @@ public class CrateDbClientTest {
         if (task != null) {
             return;
         }
-        task = new Task();
+        task = new CrateProcessTask();
         if (prepare() && task.process == null) {
             try {
                 task.run();
-                Thread.sleep(13000);
                 task.process.exitValue();
             } catch (Exception e) {
             }
@@ -211,8 +219,15 @@ public class CrateDbClientTest {
         }
     }
 
+    private static void waitForCluster() {
+        if (task == null) {
+            return;
+        }
+        task.waitForCluster();
+    }
+
     public static void stopCrate() throws IOException {
-        task.gracefulStop();
+        task.stopProcess();
         Runtime.getRuntime().exec(
                 new String[]{"sh", "-c", "rm -rf crate-*"},
                 new String[]{},
@@ -220,7 +235,7 @@ public class CrateDbClientTest {
         );
     }
 
-    public static class Task {
+    public static class CrateProcessTask {
 
         public Process process = null;
 
@@ -264,10 +279,69 @@ public class CrateDbClientTest {
             return -1;
         }
 
-        class GracefulShutdownWorker implements Runnable {
+        class StartupWorker implements Runnable {
+
+            private final int[] status = new int[]{0};
+
+            @Override
+            public void run() {
+                // wait for 200 status response on node
+                CloseableHttpClient httpclient = HttpClients.createDefault();
+
+                String host = String.format("http://localhost:%s", Constants.HTTP_PORT);
+                HttpGet httpget = new HttpGet(host);
+                System.out.println("Executing request " + httpget.getRequestLine());
+
+                final ResponseHandler<String> responseHandler = new ResponseHandler<String>() {
+                    @Override
+                    public String handleResponse(final HttpResponse response) throws IOException {
+                        status[0] = response.getStatusLine().getStatusCode();
+                        return response.getStatusLine().getReasonPhrase();
+                    };
+                };
+
+                boolean abort = false;
+                try {
+                    String res;
+                    while (status[0] != 200 || abort) {
+                        try {
+                            res = httpclient.execute(httpget, responseHandler);
+                            System.out.println(res);
+                            Thread.sleep(1000L);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                            abort = true;
+                        } catch (IOException e) {
+                            abort = true;
+                        }
+                    }
+                } finally {
+                    try {
+                        httpclient.close();
+                    } catch (IOException e) {
+                    }
+                }
+            }
+        }
+
+        public boolean waitForCluster() {
+            boolean success = true;
+            Thread healthCheck = new Thread(new StartupWorker());
+            try {
+                healthCheck.start();
+                healthCheck.join(60000L);
+            } catch (InterruptedException e) {
+                System.out.println(e.getMessage());
+                e.printStackTrace();
+                success = false;
+            }
+            return success;
+        }
+
+        class ShutdownWorker implements Runnable {
             private final Process process;
             public int exitCode = -1;
-            public GracefulShutdownWorker(Process process) {
+            public ShutdownWorker(Process process) {
                 this.process = process;
             }
             @Override
@@ -280,20 +354,22 @@ public class CrateDbClientTest {
             }
         }
 
-        public boolean gracefulStop() {
+        public boolean stopProcess() {
             int pid = pid();
             boolean success = true;
             try {
-                GracefulShutdownWorker worker = new GracefulShutdownWorker(process);
+                ShutdownWorker worker = new ShutdownWorker(process);
                 Thread shutdown = new Thread(worker);
                 shutdown.start();
-                Runtime.getRuntime().exec(new String[]{"kill", "-USR2", Integer.toString(pid)});
+                Runtime.getRuntime().exec(new String[]{"kill", Integer.toString(pid)});
                 // todo: set timeout correctly
-                shutdown.join(7200000L);
+                shutdown.join(60000L);
                 if (worker.exitCode == -1) {
-                    throw new InterruptedIOException();
+                    throw new InterruptedIOException("Crate did not shut down correctly after 60s.");
                 }
             } catch (Exception e) {
+                System.out.println(e.getMessage());
+                e.printStackTrace();
                 success = false;
             }
             return success;
