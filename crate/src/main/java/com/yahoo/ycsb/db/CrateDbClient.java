@@ -71,8 +71,23 @@ public class CrateDbClient extends DB {
 
     @Override
     public int scan(String table, String startkey, int recordcount, Set<String> fields, Vector<HashMap<String, ByteIterator>> result) {
-        System.out.println("Crate does not support scan");
+       try {
+        String stmt = "select * from " + table + " where " + primaryKey + " >= ? order by " + primaryKey + " limit ?";
+        SQLResponse response = crateClient.sql(new SQLRequest(stmt, new Object[]{startkey, recordcount})).actionGet();
+        for (Object[] row : response.rows()) {
+            HashMap<String, ByteIterator> newResult = new HashMap<String, ByteIterator>();
+            HashMap<String, String> entries = (HashMap<String, String>) row[0];
+            for (String entry : entries.keySet()) {
+                newResult.put(entry, new StringByteIterator(entries.get(entry)));
+            }
+            result.add(newResult);
+        }
         return OK;
+    } catch (Exception e) {
+        System.out.println(String.format("Could not scan values for key: %s err: %s",
+                primaryKey, e.getLocalizedMessage()));
+        return FAILURE;
+    }
     }
 
     /**

@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.Vector;
 
 import static java.util.Arrays.asList;
 import static org.testng.AssertJUnit.assertEquals;
@@ -45,12 +46,14 @@ public class CrateDbClientTest {
     private final static String MOCK_KEY0 = "0";
     private final static String MOCK_KEY1 = "1";
     private final static String MOCK_KEY2 = "2";
+    private final static String MOCK_KEY3 = "3";
     private final static int mockDataSize = 10;
     private final static int dataSize = 100;
     public static final String CRATE_VERSION = "0.50.2";
 
     private HashMap<String, ByteIterator> mockValues;
     private HashMap<String, ByteIterator> mockValues1;
+    private HashMap<String, ByteIterator> mockValues2;
 
     private static File workingDirectory;
     private static CrateProcessTask task;
@@ -70,12 +73,15 @@ public class CrateDbClientTest {
     public void setUp() {
         mockValues = new HashMap<String, ByteIterator>(mockDataSize);
         mockValues1 = new HashMap<String, ByteIterator>(mockDataSize);
+        mockValues2 = new HashMap<String, ByteIterator>(mockDataSize);
         for (int i = 0; i < mockDataSize; i++) {
             mockValues.put("field" + i, new StringByteIterator(genString(dataSize)));
             mockValues1.put("field" + i,  new StringByteIterator(genString(dataSize)));
+            mockValues2.put("field" + i,  new StringByteIterator(genString(dataSize)));
         }
         instance.insert(MOCK_TABLE, MOCK_KEY1, mockValues);
         instance.insert(MOCK_TABLE, MOCK_KEY2, mockValues1);
+        instance.insert(MOCK_TABLE, MOCK_KEY3, mockValues2);
         refreshTable();
     }
 
@@ -107,6 +113,27 @@ public class CrateDbClientTest {
     }
 
     @Test
+    public void testScan() {
+        Set<String> fields = mockValues.keySet();
+        HashMap<String, ByteIterator> result = new HashMap<String, ByteIterator>(mockValues.size());
+        Vector<HashMap<String, ByteIterator>> resultExpected = new Vector<HashMap<String, ByteIterator>>();
+        resultExpected.add(mockValues);
+        resultExpected.add(mockValues1);
+        resultExpected.add(mockValues2);
+
+        Vector<HashMap<String, ByteIterator>> results = new Vector<HashMap<String, ByteIterator>>();
+        int errCode = instance.scan(MOCK_TABLE, MOCK_KEY1, 3, fields, results);
+        assertEquals(0, errCode);
+        for (int i = 0; i < resultExpected.size(); i++) {
+            HashMap<String, ByteIterator> expectedMap = resultExpected.get(0);
+            HashMap<String, ByteIterator> actualMap = results.get(0);
+            for (Map.Entry entry : expectedMap.entrySet()) {
+                assertEquals(entry.getValue().toString(), actualMap.get(entry.getKey()).toString());
+            }
+        }
+    }
+
+    @Test
     public void testReadAllFields() {
         HashMap<String, ByteIterator> result = new HashMap<String, ByteIterator>(mockValues.size());
         assertEquals(0, instance.read(MOCK_TABLE, MOCK_KEY1, null, result));
@@ -133,6 +160,7 @@ public class CrateDbClientTest {
         instance.delete(MOCK_TABLE, MOCK_KEY0);
         instance.delete(MOCK_TABLE, MOCK_KEY1);
         instance.delete(MOCK_TABLE, MOCK_KEY2);
+        instance.delete(MOCK_TABLE, MOCK_KEY3);
     }
 
     @AfterClass
